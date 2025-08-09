@@ -5,6 +5,7 @@ matplotlib
 prophet
 transformers
 requests
-torch==2.2.0
+
+
 
 
