@@ -7,7 +7,6 @@ from transformers import pipeline
 import requests
 import time  # For retry delay
 import torch
-from transformers import pipeline
 
 
 # App layout setup
@@ -263,7 +262,9 @@ with tab2:
                     time.sleep(delay)
             return "⚠️ Could not get a response after multiple attempts."
 
-         api_key = st.secrets["TOGETHER_API_KEY"]  # Will error if secret not set
+        # Get Together.ai API key (prefer from secrets, fallback to user input)
+        api_key = st.secrets.get("TOGETHER_API_KEY")
+
 
         if api_key and user_question:
             with st.spinner("🤖 Thinking... Generating advice..."):
@@ -293,6 +294,3 @@ with tab2:
         with col2:
             if st.button("👎 No"):
                 st.warning("Thanks – your feedback helps us improve.")
-
-
-
