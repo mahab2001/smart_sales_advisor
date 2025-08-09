@@ -6,6 +6,8 @@ from prophet import Prophet
 from transformers import pipeline
 import requests
 import time  # For retry delay
+import torch
+
 
 # App layout setup
 st.set_page_config(page_title="SmartSales Advisor", layout="wide")
@@ -290,3 +292,4 @@ with tab2:
         with col2:
             if st.button("👎 No"):
                 st.warning("Thanks – your feedback helps us improve.")
+
