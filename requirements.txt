@@ -5,4 +5,3 @@ matplotlib
 prophet
 transformers
 requests
-torch
