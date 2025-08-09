@@ -7,6 +7,7 @@ from transformers import pipeline
 import requests
 import time  # For retry delay
 import torch
+from transformers import pipeline
 
 
 # App layout setup
@@ -292,4 +293,5 @@ with tab2:
         with col2:
             if st.button("👎 No"):
                 st.warning("Thanks – your feedback helps us improve.")
+
 
