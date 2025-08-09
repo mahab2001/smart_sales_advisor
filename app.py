@@ -263,7 +263,7 @@ with tab2:
                     time.sleep(delay)
             return "⚠️ Could not get a response after multiple attempts."
 
-        api_key = st.secrets.get("TOGETHER_API_KEY", st.text_input("Enter your Together.ai API key"))
+         api_key = st.secrets["TOGETHER_API_KEY"]  # Will error if secret not set
 
         if api_key and user_question:
             with st.spinner("🤖 Thinking... Generating advice..."):
@@ -293,5 +293,6 @@ with tab2:
         with col2:
             if st.button("👎 No"):
                 st.warning("Thanks – your feedback helps us improve.")
+
 
 
