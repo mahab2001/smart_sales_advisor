@@ -7,7 +7,8 @@ from transformers import pipeline
 import requests
 import time  # For retry delay
 import torch
-
+import seaborn as sns  # For nicer chart colors
+import re
 
 # App layout setup
 st.set_page_config(page_title="SmartSales Advisor", layout="wide")
@@ -89,14 +90,18 @@ with tab1:
         df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values(by='date')
 
+        # ✅ Store in session state for Tab 2
+        st.session_state["sales_df"] = df
+
         st.subheader("📊 Preview of Your Data")
         st.dataframe(df.head())
 
-        # Calculate metrics first
+
+        # Calculate metrics
         daily_revenue, last_week, this_week, delta, aov, top_product, best_days, worst_day, summary_input = calculate_metrics(df)
         st.session_state["summary_input"] = summary_input
 
-        # 📌 Styled Key Business Metrics
+        # 📌 Styled Key Metrics
         st.subheader("📌 Key Business Metrics")
         st.markdown(
             """
@@ -109,28 +114,15 @@ with tab1:
                 text-align: center;
                 margin-bottom: 10px;
             }
-            .metric-title {
-                font-size: 16px;
-                color: #333;
-                font-weight: bold;
-            }
-            .metric-value {
-                font-size: 24px;
-                color: #004aad;
-                font-weight: bold;
-                margin-top: 5px;
-            }
-            .metric-delta {
-                font-size: 14px;
-                font-weight: bold;
-            }
+            .metric-title { font-size: 16px; color: #333; font-weight: bold; }
+            .metric-value { font-size: 24px; color: #004aad; font-weight: bold; margin-top: 5px; }
+            .metric-delta { font-size: 14px; font-weight: bold; }
             </style>
             """,
             unsafe_allow_html=True
         )
 
         col1, col2, col3 = st.columns(3)
-
         with col1:
             st.markdown(f"""
                 <div class="metric-card">
@@ -138,7 +130,6 @@ with tab1:
                     <div class="metric-value">${last_week:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
-
         with col2:
             delta_color = "green" if delta >= 0 else "red"
             st.markdown(f"""
@@ -148,7 +139,6 @@ with tab1:
                     <div class="metric-delta" style="color:{delta_color};">{delta:.2f}%</div>
                 </div>
             """, unsafe_allow_html=True)
-
         with col3:
             st.markdown(f"""
                 <div class="metric-card">
@@ -157,48 +147,166 @@ with tab1:
                 </div>
             """, unsafe_allow_html=True)
 
-        # 📊 Extended Business Metrics
-        st.subheader("📊 Extended Business Metrics")
+        import seaborn as sns
+
+        # 📊 Weekly Revenue
         weekly_revenue = df.resample('W-SUN', on='date')['revenue'].sum().reset_index()
-        st.markdown("**📆 Weekly Revenue:**")
-        st.dataframe(weekly_revenue)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**📆 Weekly Revenue:**")
+            st.dataframe(weekly_revenue)
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.lineplot(data=weekly_revenue, x='date', y='revenue', ax=ax, color="#004aad")
+            ax.set_title("Weekly Revenue Trend", fontsize=14)
+            st.pyplot(fig)
 
+        # 💰 AOV by Product
         aov_by_product = (df.groupby('product').apply(lambda x: (x['revenue'] / x['quantity']).mean()))
-        st.markdown("**💰 AOV by Product:**")
-        st.dataframe(aov_by_product.rename("AOV"))
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**💰 AOV by Product:**")
+            st.dataframe(aov_by_product.rename("AOV"))
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.barplot(x=aov_by_product.values, y=aov_by_product.index, palette="Blues_r", ax=ax)
+            ax.set_title("Average Order Value by Product", fontsize=14)
+            st.pyplot(fig)
 
+        # 📦 Units Sold
         units_sold = df.groupby('product')['quantity'].sum()
-        st.markdown("**📦 Units Sold per Product:**")
-        st.dataframe(units_sold.rename("Units Sold"))
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**📦 Units Sold per Product:**")
+            st.dataframe(units_sold.rename("Units Sold"))
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.barplot(x=units_sold.values, y=units_sold.index, palette="coolwarm", ax=ax)
+            ax.set_title("Units Sold per Product", fontsize=14)
+            st.pyplot(fig)
 
+        # 📈 Revenue Share
         revenue_share = df.groupby('product')['revenue'].sum()
         revenue_share_percent = (revenue_share / revenue_share.sum() * 100).round(2)
-        st.markdown("**📈 Revenue Share (%):**")
-        st.dataframe(revenue_share_percent.rename("Revenue %"))
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**📈 Revenue Share (%):**")
+            st.dataframe(revenue_share_percent.rename("Revenue %"))
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.pie(revenue_share_percent, labels=revenue_share_percent.index, autopct='%1.1f%%', startangle=90,
+                   colors=sns.color_palette("pastel"))
+            ax.set_title("Revenue Share by Product", fontsize=14)
+            st.pyplot(fig)
 
+        # 📅 Avg Revenue by Day of Week
         avg_revenue_by_dow = df.groupby(df['date'].dt.day_name())['revenue'].mean()
-        st.markdown("**📅 Average Revenue by Day of Week:**")
-        st.dataframe(avg_revenue_by_dow.rename("Avg Revenue"))
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown("**📅 Average Revenue by Day of Week:**")
+            st.dataframe(avg_revenue_by_dow.rename("Avg Revenue"))
+        with col2:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            sns.barplot(x=avg_revenue_by_dow.index, y=avg_revenue_by_dow.values, palette="viridis", ax=ax)
+            ax.set_title("Average Revenue by Day of Week", fontsize=14)
+            st.pyplot(fig)
 
-        # 📈 Forecasting LAST
+        # 📈 Automatic Forecasting
+        dataset_days = (df['date'].max() - df['date'].min()).days
+        if dataset_days < 90:
+            forecast_days = 30
+        elif dataset_days < 180:
+            forecast_days = 60
+        elif dataset_days < 365:
+            forecast_days = 90
+        else:
+            forecast_days = 180
+
+        forecast_months = forecast_days // 30
+
         st.subheader("📈 Forecasting with Prophet")
         with st.spinner("Training model... please wait"):
-            model, forecast = train_prophet(daily_revenue)
-        fig1 = model.plot(forecast)
+            model = Prophet()
+            model.fit(daily_revenue)
+            future = model.make_future_dataframe(periods=forecast_days)
+            forecast = model.predict(future)
+
+        fig1 = model.plot(forecast, figsize=(8, 4))
         st.pyplot(fig1)
 
+        # Explanation
+        st.info(f"We forecasted for {forecast_months} months ({forecast_days} days) based on your dataset size ({dataset_days} days of sales data). "
+                "Smaller datasets give less reliable long-term predictions, so we adjusted the forecast period accordingly.")
+
+
+import re
+
 with tab2:
-    if "summary_input" in st.session_state:
+    if "summary_input" in st.session_state and "sales_df" in st.session_state:
         st.subheader("💡 AI-Generated Business Insights")
 
-        with st.spinner("Generating insights..."):
-            summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-            suggestion = summarizer(st.session_state['summary_input'], max_length=120, min_length=40, do_sample=False)[0]['summary_text']
-        st.success(suggestion)
+        api_key = st.secrets.get("TOGETHER_API_KEY")
+        df = st.session_state["sales_df"]
 
+        # ✅ Helper to clean numbering artifacts
+        def clean_numbered_list(text):
+            lines = text.splitlines()
+            cleaned_lines = []
+            for line in lines:
+                if re.match(r"^\s*\d+[\*\.\)]\s*$", line.strip()):  # skip orphan numbers
+                    continue
+                cleaned_lines.append(line)
+            return "\n".join(cleaned_lines).strip()
+
+        # ✅ Generate insights only once per dataset (when file is first uploaded)
+        if "ai_insight" not in st.session_state and api_key:
+            summary_text = st.session_state["summary_input"]
+
+            ai_prompt = f"""
+            You are an AI sales advisor. Using the given sales metrics, write a natural, insightful 3-4 sentence summary 
+            that avoids repetition and gives actionable advice.
+
+            Metrics: {summary_text}
+
+            Guidelines:
+            - Do not repeat days if they appear twice.
+            - Replace bullet-like text with a smooth narrative.
+            - Interpret the growth rate (say if sales are increasing or decreasing).
+            - End with at least one practical suggestion to improve sales.
+            - If you list numbered points, stop numbering after the last real point.
+            """
+
+            with st.spinner("Generating insights..."):
+                try:
+                    response = requests.post(
+                        "https://api.together.xyz/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "mistralai/Mistral-7B-Instruct-v0.2",
+                            "messages": [
+                                {"role": "system", "content": "You are an AI sales analyst."},
+                                {"role": "user", "content": ai_prompt}
+                            ],
+                            "temperature": 0,
+                            "max_tokens": 250
+                        }
+                    )
+                    if response.status_code == 200:
+                        raw_output = response.json()["choices"][0]["message"]["content"]
+                        st.session_state["ai_insight"] = clean_numbered_list(raw_output)
+                    else:
+                        st.session_state["ai_insight"] = f"⚠️ API Error {response.status_code}: {response.text}"
+                except Exception as e:
+                    st.session_state["ai_insight"] = f"⚠️ Error generating insights: {e}"
+
+        # ✅ Always show saved insight without regenerating
+        st.success(st.session_state.get("ai_insight", "⚠️ No insights generated."))
+
+        # ------------------- CHAT SECTION -------------------
         st.subheader("🤖 Ask the AI Sales Advisor")
-
-        # Default suggestions
         st.markdown("**Not sure what to ask? Try these:**")
         example_questions = [
             "What was my best sales month?",
@@ -212,80 +320,91 @@ with tab2:
             if cols[idx].button(q):
                 st.session_state["user_question_prefill"] = q
 
-        # Chat history init
         if "chat_history" not in st.session_state:
             st.session_state["chat_history"] = []
 
-        # Text input
         user_question = st.text_input(
             "Ask a question about your sales data:",
             value=st.session_state.get("user_question_prefill", "")
         )
 
-        def ask_together_ai_with_memory(api_key, retries=3, delay=2):
-            # Build conversation with memory
-            history_messages = [
-                {"role": "system", "content": "You are an AI sales advisor helping small businesses based on the provided sales metrics."},
-                {"role": "system", "content": st.session_state['summary_input']}
-            ]
-            for turn in st.session_state["chat_history"][-5:]:
-                history_messages.append({"role": "user", "content": turn["question"]})
-                history_messages.append({"role": "assistant", "content": turn["answer"]})
-            history_messages.append({"role": "user", "content": user_question})
+        def answer_with_pandas(question, df):
+            q = question.lower()
+            try:
+                if "best sales month" in q:
+                    df['month'] = df['date'].dt.to_period('M')
+                    best_month = df.groupby('month')['revenue'].sum().idxmax()
+                    return f"Your best sales month was {best_month} with total revenue of ${df.groupby('month')['revenue'].sum().max():,.2f}."
+                elif "day of the week" in q and "best" in q:
+                    best_day = df.groupby(df['date'].dt.day_name())['revenue'].mean().idxmax()
+                    return f"The best performing day of the week is {best_day}."
+                elif "top product" in q or "best selling product" in q:
+                    top_product = df.groupby('product')['revenue'].sum().idxmax()
+                    return f"Your top-selling product is {top_product}."
+            except:
+                pass
+            return None
+
+        def ask_together_ai(api_key, question, df):
+            summary = {
+                "total_revenue": df['revenue'].sum(),
+                "top_product": df.groupby('product')['revenue'].sum().idxmax(),
+                "best_day": df.groupby(df['date'].dt.day_name())['revenue'].mean().idxmax(),
+                "date_range": f"{df['date'].min().date()} to {df['date'].max().date()}",
+                "num_products": df['product'].nunique()
+            }
+            prompt = f"""
+            You are an AI sales advisor. Use the following dataset summary to answer the question.
+
+            Dataset Summary: {summary}
+
+            Question: {question}
+
+            Be specific and provide actionable business advice.
+            If you list numbered points, stop numbering after the last real point.
+            """
 
             url = "https://api.together.xyz/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
             body = {
                 "model": "mistralai/Mistral-7B-Instruct-v0.2",
-                "messages": history_messages,
+                "messages": [
+                    {"role": "system", "content": "You are an AI sales analyst."},
+                    {"role": "user", "content": prompt}
+                ],
                 "temperature": 0.7,
                 "max_tokens": 256
             }
+            response = requests.post(url, headers=headers, json=body)
+            if response.status_code == 200:
+                raw_output = response.json()['choices'][0]['message']['content']
+                return clean_numbered_list(raw_output)
+            else:
+                return f"⚠️ API Error {response.status_code}: {response.text}"
 
-            for attempt in range(retries):
-                try:
-                    response = requests.post(url, headers=headers, json=body)
-                    if response.status_code == 429:
-                        st.warning("⚠️ Rate limit hit. Retrying...")
-                        time.sleep(delay)
-                        continue
-                    if response.status_code == 200:
-                        return response.json()['choices'][0]['message']['content']
+        if api_key and user_question.strip():
+            last_q = st.session_state["chat_history"][-1]["question"] if st.session_state["chat_history"] else None
+            if user_question != last_q:
+                with st.spinner("🤖 Thinking..."):
+                    direct_answer = answer_with_pandas(user_question, df)
+                    if direct_answer:
+                        ai_response = direct_answer
                     else:
-                        st.error(f"API Error {response.status_code}: {response.text}")
-                        time.sleep(delay)
-                except requests.exceptions.RequestException as e:
-                    st.error(f"⚠️ Request failed: {e}")
-                    time.sleep(delay)
-            return "⚠️ Could not get a response after multiple attempts."
+                        ai_response = ask_together_ai(api_key, user_question, df)
 
-        # Get Together.ai API key (prefer from secrets, fallback to user input)
-        api_key = st.secrets.get("TOGETHER_API_KEY")
+                st.session_state["chat_history"].append({
+                    "question": user_question,
+                    "answer": ai_response
+                })
 
+            st.session_state["user_question_prefill"] = ""  # clear prefill
 
-        if api_key and user_question:
-            with st.spinner("🤖 Thinking... Generating advice..."):
-                ai_response = ask_together_ai_with_memory(api_key)
-
-            # Incomplete / ambiguous response handling
-            vague_phrases = ["i don't know", "not sure", "cannot", "unsure", "not enough information", "need more details"]
-            if len(ai_response.strip()) < 20 or any(phrase in ai_response.lower() for phrase in vague_phrases):
-                ai_response = "⚠️ Please clarify your question so I can give you better advice."
-
-            # Store in chat history
-            st.session_state["chat_history"].append({"question": user_question, "answer": ai_response})
-
-        # Show conversation history
         if st.session_state["chat_history"]:
             st.markdown("### 🗨️ Conversation History")
             for turn in st.session_state["chat_history"]:
                 st.markdown(f"**You:** {turn['question']}")
                 st.markdown(f"**🤖 Advisor:** {turn['answer']}")
 
-        # Feedback
         st.markdown("### Was this advice helpful?")
         col1, col2 = st.columns(2)
         with col1:
