@@ -114,4 +114,4 @@ MIT License
 
 ## 💌 Contact
 
-Created by [@maabmajzoob](www.linkedin.com/in/maab-majzoob-a54282189) ✨
+Created by [@maabmajzoob](https://www.linkedin.com/in/maab-majzoob-a54282189/)✨
